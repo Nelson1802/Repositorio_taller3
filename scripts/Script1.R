@@ -58,7 +58,7 @@ pop_crimen <- read_xlsx("stores/Crimen/pop_crimen_upz.xlsx") |>
   ) 
 
 ## Mapa de UPZ
-## Fuente: Catastro Distrital
+## Fuente: IDECA - Catastro distrital
 
 upz <- sf::st_read("stores/Geometries/UPZ/Upz.shp") |> 
   st_transform(4326) |> 
@@ -137,4 +137,78 @@ test_amenities <- test_crime |>
   left_join(ips_upz, by = "CODIGO_UPZ") |> 
   replace_na(list(n_schools = 0, n_parks = 0, n_ips = 0))
 
+## c. Características de la vivienda: Parqueaderos, depósitos, patios y terrazas
+
+## Para esta sección, se realiza una búsqueda dentro de las descripciones de 
+## cada vivienda
+
+add_facilities <- function(dataset) {
+  dataset |> 
+    mutate(tiene_terraza = str_detect(description, ".*[Tt]erraza.*"),
+           tiene_patio = str_detect(description, ".*[Pp]atio.*"),
+           tiene_parqueadero = str_detect(description, ".*[Pp]arquead.*"),
+           tiene_deposito = str_detect(description, ".*[Dd]ep[oó]sito.*"))
+}
+
+train_facilities <- train_amenities |> add_facilities()
+
+test_facilities <- test_amenities |> add_facilities()
+
+## Se verifican los missing values en las bases de datos train_final y test-final
+naniar::miss_var_summary(train_facilities)
+naniar::miss_var_summary(test_facilities)
+
+##  Cleanup final de las bases de datos
+train_final <- train_facilities |> 
+  replace_na(list(tiene_terraza = F,
+                  tiene_patio = F,
+                  tiene_parqueadero = F,
+                  tiene_deposito = F)) |> 
+  select(-c(title, description, CODIGO_UPZ, NOMBRE,
+            `Código localidad`, `Nombre localidad`)) |> 
+  replace_na(list(tasa_hom = mean(train_facilities$tasa_hom, na.rm = TRUE),
+                  tasa_hurtor = mean(train_facilities$tasa_hurtor, na.rm = TRUE))) |> 
+  st_drop_geometry()
+
+naniar::miss_var_summary(train_final)
+
+
+test_final <- test_facilities |> 
+  replace_na(list(tiene_terraza = F,
+                  tiene_patio = F,
+                  tiene_parqueadero = F,
+                  tiene_deposito = F)) |> 
+  select(-c(title, description, CODIGO_UPZ, NOMBRE,
+            `Código localidad`, `Nombre localidad`, price)) |> 
+  replace_na(list(tasa_hom = mean(train_facilities$tasa_hom, na.rm = TRUE),
+                  tasa_hurtor = mean(train_facilities$tasa_hurtor, na.rm = TRUE))) |> 
+  st_drop_geometry()
+
+naniar::miss_var_summary(test_final)
+
+## Se exportan las bases de datos finales
+
+write_csv(train_final, "stores/train_final.csv")
+write_csv(test_final, "stores/test_final.csv")
+
+rm(train_facilities, test_facilities)
+
+## Predict price based on models ----
+
+## Modelo N1. Regresión lineal simple
+lin_reg_fit <- linear_reg() |> 
+  set_engine("lm") |> 
+  fit(price ~ year + month + bedrooms + property_type + lat + lon + tasa_hom + tasa_hurtor + n_schools + n_parks + n_ips + tiene_terraza + tiene_parqueadero + tiene_patio + tiene_deposito,
+      data = train_final)
+
+lin_reg_predict <- predict(lin_reg_fit, new_data = test_final)
+
+lin_reg_output <- test_final |> 
+  select(property_id) |> 
+  bind_cols(lin_reg_predict) |> 
+  rename(price = .pred)
+
+lin_reg_output
+
+write_csv(lin_reg_output, "stores/Predictions/lin_reg.csv")
 
