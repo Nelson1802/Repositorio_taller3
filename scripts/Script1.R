@@ -211,4 +211,4 @@ lin_reg_output <- test_final |>
 lin_reg_output
 
 write_csv(lin_reg_output, "stores/Predictions/lin_reg.csv")
-
+  
