@@ -1,4 +1,4 @@
-# Problem Set 3 for Big Data and Machine Learning for Applied Economics
+# Problem Set 3
 
 Universidad de Los Andes
 
