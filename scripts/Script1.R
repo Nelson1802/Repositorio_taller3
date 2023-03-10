@@ -11,7 +11,9 @@ rm(list = ls())
 library("pacman")
 p_load("tidyverse", "sf", "naniar", "tidymodels", "readxl", "psych","ranger","glmnet","naniar")
 
-setwd("/Users/betinacortes/Desktop/Repositorio_taller3")
+#setwd("/Users/betinacortes/Desktop/Repositorio_taller3")
+#setwd("C:/Users/Yilmer Palacios/Desktop/Repositorios GitHub/Repositorio_taller3")
+
 
 # Importing Dataset ----
 # Removing City and operation type as they don't add information 
