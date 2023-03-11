@@ -12,7 +12,7 @@ library("pacman")
 p_load("tidyverse", "sf", "naniar", "tidymodels", "readxl", "psych","ranger","glmnet","naniar","tidyverse", "caret", "glmnet", "ggplot2","ggraph","gt")
 
 #setwd("/Users/betinacortes/Desktop/Repositorio_taller3")
-#setwd("C:/Users/Yilmer Palacios/Desktop/Repositorios GitHub/Repositorio_taller3")
+setwd("C:/Users/Yilmer Palacios/Desktop/Repositorios GitHub/Repositorio_taller3")
 
 
 # Importing Dataset ----
@@ -195,7 +195,205 @@ write_csv(test_final, "stores/test_final.csv")
 
 rm(train_facilities, test_facilities)
 
-## Predict price based on models ----
+## teniendo las bases finales hacemos un resumen de las bases de dato de trabajo
+
+###### Summary tables ----
+
+describeBy(train_final |> select(bedrooms, tasa_hom, tasa_hurtor,
+                                 n_schools, n_parks, n_ips,
+                                 tiene_terraza, tiene_patio,
+                                 tiene_parqueadero, tiene_deposito,
+                                 property_type),
+           group = "property_type", fast = TRUE)
+
+list_functions <- list(
+  mean = ~mean(.x, na.rm = TRUE),
+  min = ~min(.x, na.rm = TRUE),
+  max = ~max(.x, na.rm = TRUE),
+  sd = ~sd(.x, na.rm = TRUE) 
+)
+
+## Resumen para las variables numericas
+table_1 <- train_final |> 
+  select(-c(year, month)) |> 
+  summarise(across(
+    where(is.numeric),
+    list_functions,
+    .names = "{.col}__{.fn}"
+  )) |> 
+  pivot_longer(
+    price__mean:n_ips__sd, names_to = "var", values_to = "value"
+  ) |> 
+  separate(var, sep = "__", into = c("Variable", "medida")) |> 
+  pivot_wider(
+    id_cols = Variable, names_from = medida, values_from = value
+  )
+
+table_2 <- test_final |> 
+  select(-c(year, month)) |> 
+  summarise(across(
+    where(is.numeric),
+    list_functions,
+    .names = "{.col}__{.fn}"
+  )) |> 
+  pivot_longer(
+    bedrooms__mean:n_ips__sd, names_to = "var", values_to = "value"
+  ) |> 
+  separate(var, sep = "__", into = c("Variable", "medida")) |> 
+  pivot_wider(
+    id_cols = Variable, names_from = medida, values_from = value
+  ) 
+
+table_3 <- table_1 |> 
+  left_join(table_2, by = "Variable", suffix = c("_train", "_test")) |> 
+  mutate(
+    Variable = case_when(
+      Variable == "price" ~ "Precio",
+      Variable == "bedrooms" ~ "Cuartos",
+      Variable == "lat" ~ "Latidud",
+      Variable == "lon" ~ "Longitud",
+      Variable == "tasa_hom" ~ "Tasa de Homicidio",
+      Variable == "tasa_hurtor" ~ "Tasa de hurto a residencias",
+      Variable == "n_schools" ~ "Número de colegios",
+      Variable == "n_parks" ~ "Número de parques",
+      Variable == "n_ips" ~ "Número de hospitales")
+  )
+
+numeric_output <- table_3 |> 
+  gt() |> 
+  fmt_number(
+    columns = mean_train:sd_test,
+    decimals = 2
+  ) |> 
+  cols_label(
+    mean_train = "Mean",
+    min_train = "Min",
+    max_train = "Max",
+    sd_train = "SD",
+    mean_test = "Mean",
+    min_test = "Min",
+    max_test = "Max",
+    sd_test = "SD",
+  ) |> 
+  cols_width(
+    ends_with("train") ~ px(130),
+    ends_with("test") ~ px(130)
+  ) |> 
+  tab_header(
+    title = md("**Estadísticas de resumen**"),
+    subtitle = " Variables numéricas"
+  ) |> 
+  tab_spanner(
+    label = "Entrenamiento",
+    columns = c(mean_train, min_train, max_train, sd_train)
+  ) |> 
+  tab_spanner(
+    label = "Prueba",
+    columns = c(mean_test, min_test, max_test, sd_test)
+  ) |> 
+  tab_source_note(
+    source_note = "Nota: No se incluye información sobre las variables de habitaciones, area total, cubierta y baños porque no se usaron en el entrenamiento."
+  )
+
+gtsave(numeric_output, "resumen_numericas.html")
+
+## Resumen para las variables dicótomas
+
+table_4 <- train_final |> 
+  summarise(across(
+    where(is.logical),
+    mean
+  )) |> 
+  pivot_longer(
+    tiene_terraza:tiene_deposito, names_to = "Variable", values_to = "value"
+  )
+
+table_5 <- test_final |> 
+  summarise(across(
+    where(is.logical),
+    mean
+  )) |> 
+  pivot_longer(
+    tiene_terraza:tiene_deposito, names_to = "Variable", values_to = "value"
+  )
+
+table_6 <- table_4 |> 
+  left_join(table_5, by = "Variable", suffix = c("_train", "_test")) |> 
+  mutate(
+    Variable = case_when(
+      Variable == "tiene_terraza" ~ "Tiene terraza",
+      Variable == "tiene_patio" ~ "Tiene patio",
+      Variable == "tiene_parqueadero" ~ "Tiene parqueadero",
+      Variable == "tiene_deposito" ~ "Tiene depósito")
+  )
+
+logical_output <- table_6 |> 
+  gt() |> 
+  fmt_number(
+    columns = value_train:value_test,
+    decimals = 2
+  ) |> 
+  cols_label(
+    value_train = "Entrenamiento",
+    value_test = "Prueba"
+  ) |> 
+  cols_width(
+    ends_with("train") ~ px(150),
+    ends_with("test") ~ px(150),
+    Variable ~ px(200)
+  ) |> 
+  tab_header(
+    title = md("**Estadísticas de resumen**"),
+    subtitle = "Variables lógicas"
+  ) |> 
+  tab_spanner(
+    label = "Proporción",
+    columns = c(value_train, value_test)
+  ) |> 
+  tab_source_note(
+    source_note = "Nota: No se incluye información sobre las variables de habitaciones, area total, cubierta y baños porque no se usaron en el entrenamiento."
+  )
+
+gtsave(logical_output, "resumen_logicas.html")
+
+### hacemos los Mapas
+
+ggplot() +
+  geom_sf(data = upz) +
+  geom_sf(data = train_geo, alpha = 0.075, size = 0.2, color = "darkblue") +
+  labs(
+    title = "Distribución de los inmuebles\nen venta sobre las\nUPZ de Bogotá",
+    subtitle = "Conjunto de entrenamiento"
+  ) +
+  theme_void() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 8, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5, size = 6.5),
+    plot.background = element_rect(fill = "white", color = NA)
+  )
+
+ggsave("viviendas_entrenamiento.png", width = 700, height = 1000, unit = "px")
+
+ggplot() +
+  geom_sf(data = upz) +
+  geom_sf(data = test_geo, alpha = 0.075, size = 0.2, color = "darkgreen") +
+  labs(
+    title = "Distribución de los inmuebles\nen venta sobre las\nUPZ de Bogotá",
+    subtitle = "Conjunto de prueba"
+  ) +
+  theme_void() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 8, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5, size = 6.5),
+    plot.background = element_rect(fill = "white", color = NA)
+  )
+
+ggsave("viviendas_prueba.png", width = 700, height = 1000, unit = "px")
+
+
+##########################################################
+############ Predicciones del precio   ###################
+##########################################################
 
 ## Modelo N1. Regresión lineal simple
 lin_reg_fit <- linear_reg() |> 
