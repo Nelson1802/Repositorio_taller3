@@ -9,7 +9,7 @@ rm(list = ls())
 
 # install.packages("pacman")
 library("pacman")
-p_load("tidyverse", "sf", "naniar", "tidymodels", "readxl", "psych","ranger","glmnet","naniar","tidyverse", "caret", "glmnet")
+p_load("tidyverse", "sf", "naniar", "tidymodels", "readxl", "psych","ranger","glmnet","naniar","tidyverse", "caret", "glmnet", "ggplot2","ggraph","gt")
 
 #setwd("/Users/betinacortes/Desktop/Repositorio_taller3")
 #setwd("C:/Users/Yilmer Palacios/Desktop/Repositorios GitHub/Repositorio_taller3")
@@ -248,7 +248,7 @@ ridge_reg_output <- test_final |>
 
 write_csv(ridge_reg_output, "stores/Predictions/ridge_reg.csv")
 
-## Random Forest Regression
+## Regresión con Random Forest
 
 random_forest_fit <- rand_forest(mode = "regression") |> 
   set_engine("ranger") |> 
