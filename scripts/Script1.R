@@ -9,9 +9,11 @@ rm(list = ls())
 
 # install.packages("pacman")
 library("pacman")
-p_load("tidyverse", "sf", "naniar", "tidymodels", "readxl", "psych","ranger","glmnet","naniar")
+p_load("tidyverse", "sf", "naniar", "tidymodels", "readxl", "psych","ranger","glmnet","naniar","tidyverse", "caret", "glmnet")
 
-setwd("/Users/betinacortes/Desktop/Repositorio_taller3")
+#setwd("/Users/betinacortes/Desktop/Repositorio_taller3")
+#setwd("C:/Users/Yilmer Palacios/Desktop/Repositorios GitHub/Repositorio_taller3")
+
 
 # Importing Dataset ----
 # Removing City and operation type as they don't add information 
@@ -211,4 +213,60 @@ lin_reg_output <- test_final |>
 lin_reg_output
 
 write_csv(lin_reg_output, "stores/Predictions/lin_reg.csv")
+
+## Regresión Lineal regularizada
+
+## Lasso 
+
+lasso_reg_fit <- linear_reg(penalty = 0.001, mixture = 1) |> 
+  set_engine("glmnet") |> 
+  fit(price ~ year + month + bedrooms + property_type + lat + lon + tasa_hom + tasa_hurtor + n_schools + n_parks + n_ips + tiene_terraza + tiene_parqueadero + tiene_patio + tiene_deposito,
+      data = train_final)
+
+lasso_reg_predict <- predict(lasso_reg_fit, new_data = test_final)
+
+lasso_reg_output <- test_final |> 
+  select(property_id) |> 
+  bind_cols(lasso_reg_predict) |> 
+  rename(price = .pred)
+
+write_csv(lasso_reg_output, "stores/Predictions/lasso_reg.csv")
+
+## Ridge
+
+ridge_reg_fit <- linear_reg(penalty = 0.001, mixture = 0) |> 
+  set_engine("glmnet") |> 
+  fit(price ~ year + month + bedrooms + property_type + lat + lon + tasa_hom + tasa_hurtor + n_schools + n_parks + n_ips + tiene_terraza + tiene_parqueadero + tiene_patio + tiene_deposito,
+      data = train_final)
+
+ridge_reg_predict <- predict(ridge_reg_fit, new_data = test_final)
+
+ridge_reg_output <- test_final |> 
+  select(property_id) |> 
+  bind_cols(lin_reg_predict) |> 
+  rename(price = .pred)
+
+write_csv(ridge_reg_output, "stores/Predictions/ridge_reg.csv")
+
+## Random Forest Regression
+
+random_forest_fit <- rand_forest(mode = "regression") |> 
+  set_engine("ranger") |> 
+  fit_xy(
+    x = train_final[, c("year", "month", "bedrooms", "property_type",
+                        "lat", "lon", "tasa_hom", "tasa_hurtor", 
+                        "n_schools", "n_parks", "n_ips", 
+                        "tiene_terraza", "tiene_parqueadero",
+                        "tiene_patio", "tiene_deposito")],
+    y = train_final$price
+  )
+
+random_forest_predict <- predict(random_forest_fit, new_data = test_final)
+
+random_forest_output <- test_final |> 
+  select(property_id) |> 
+  bind_cols(random_forest_predict) |> 
+  rename(price = .pred)
+
+write_csv(random_forest_output, "stores/Predictions/random_forest.csv")
   
